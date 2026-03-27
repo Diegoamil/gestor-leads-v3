@@ -1,0 +1,209 @@
+// Prisma Schema — Gestor de Leads v3
+// Migração do modelo Supabase para Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Nível 1: Account (Agência SaaS)
+// ══════════════════════════════════════════════════════════════
+model Account {
+  id                   String    @id @default(uuid())
+  nome                 String
+  logo                 String?
+  plano                String    @default("starter") // starter | agency | enterprise
+  onboarding_completed Boolean   @default(false)
+  onboarding_data      Json?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  empresas  Empresa[]
+  usuarios  Usuario[]
+
+  @@map("accounts")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Nível 2: Empresa (Cliente da Agência)
+// ══════════════════════════════════════════════════════════════
+model Empresa {
+  id         String   @id @default(uuid())
+  account_id String
+  nome       String
+  logo       String?
+  segmento   String   @default("servicos") // veiculos | imoveis | servicos | varejo | saude | educacao
+  plano      String   @default("starter")  // starter | pro | enterprise
+
+  // Configuração IA (JSON flexível)
+  configuracao_ia Json @default("{}")
+
+  // Meta Ads
+  meta_pixel_id     String?
+  meta_access_token String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  account           Account             @relation(fields: [account_id], references: [id], onDelete: Cascade)
+  leads             Lead[]
+  conexoes_whatsapp ConexaoWhatsApp[]
+  llm_queue         LlmQueue[]
+
+  @@map("empresas")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Nível 3: Usuários e Autenticação
+// ══════════════════════════════════════════════════════════════
+model Usuario {
+  id          String   @id @default(uuid())
+  nome        String
+  email       String   @unique
+  senha_hash  String
+  avatar      String?
+  role        String   @default("salesperson") // admin_master | account_admin | manager | salesperson
+  account_id  String?
+  empresa_ids String[] @default([])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  account Account? @relation(fields: [account_id], references: [id], onDelete: SetNull)
+
+  @@map("usuarios")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Conexões WhatsApp (Evolution API)
+// ══════════════════════════════════════════════════════════════
+model ConexaoWhatsApp {
+  id                       String   @id @default(uuid())
+  empresa_id               String
+  nome_instancia           String
+  evolution_instance_name  String   @unique
+  evolution_status         String   @default("disconnected") // disconnected | connecting | connected | open | close
+  qr_code                  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  empresa Empresa @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  leads   Lead[]
+
+  @@map("conexoes_whatsapp")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Leads
+// ══════════════════════════════════════════════════════════════
+model Lead {
+  id           String  @id @default(uuid())
+  empresa_id   String
+  conexao_id   String?
+  telefone_jid String
+  nome         String
+  avatar       String?
+  empresa_nome String? // nome da empresa do lead (não confundir com relação)
+
+  // Classificação
+  temperatura String @default("frio")      // quente | morno | frio
+  estagio     String @default("novo")      // novo | atendimento | negociacao | agendado | fechado
+  score       Int    @default(0)
+
+  // Campanha / Fonte
+  campanha String? // Google Ads | Facebook Ads | etc
+  source   String? @default("Orgânico")
+  veiculo  String?
+
+  // Meta Ads Tracking
+  meta_conversion_data String?
+  ad_title             String?
+  ad_body              String?
+  ad_source_url        String?
+  ad_thumbnail_url     String?
+  ad_source_id         String?
+  ad_source_app        String?
+
+  // IA
+  resumo_ia   String?
+  sugestao_ia String?
+  alertas     String[] @default([])
+
+  // Timestamps
+  ultima_interacao DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  empresa      Empresa          @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  conexao      ConexaoWhatsApp? @relation(fields: [conexao_id], references: [id], onDelete: SetNull)
+  mensagens    Mensagem[]
+  llm_queue    LlmQueue[]
+
+  @@unique([empresa_id, telefone_jid])
+  @@index([empresa_id])
+  @@index([temperatura])
+  @@index([estagio])
+  @@map("leads")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Mensagens
+// ══════════════════════════════════════════════════════════════
+model Mensagem {
+  id        String  @id @default(uuid())
+  lead_id   String
+  texto     String
+  origem    String  // cliente | vendedor
+  midia_url String?
+
+  hora DateTime @default(now())
+
+  lead Lead @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id])
+  @@index([hora])
+  @@map("mensagens")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Fila de Processamento IA
+// ══════════════════════════════════════════════════════════════
+model LlmQueue {
+  id              String   @id @default(uuid())
+  lead_id         String   @unique
+  empresa_id      String
+  status          String   @default("pending") // pending | processing | processed | failed | ignored_unconfigured
+  last_message_at DateTime @default(now())
+  retries         Int      @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  lead    Lead    @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  empresa Empresa @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("llm_queue")
+}
+
+// ══════════════════════════════════════════════════════════════
+// Logs de Webhook (para debug)
+// ══════════════════════════════════════════════════════════════
+model WebhookLog {
+  id             String   @id @default(uuid())
+  instance_name  String
+  event_type     String
+  payload        Json
+
+  created_at DateTime @default(now())
+
+  @@index([instance_name])
+  @@index([created_at])
+  @@map("webhook_logs")
+}
