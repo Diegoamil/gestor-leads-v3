@@ -7,7 +7,7 @@ import { prisma } from '../config/database.js';
 // Migração do process-llm-queue e ia-processor do Supabase
 // ══════════════════════════════════════════════════════════════
 
-const QUEUE_NAME = 'gestor-leads:llm-process';
+const QUEUE_NAME = 'gestor-leads-llm-process';
 const DEBOUNCE_MS = 3 * 60 * 1000; // 3 minutos de debounce
 const POLL_INTERVAL_MS = 30 * 1000; // Verificar a cada 30 segundos
 
