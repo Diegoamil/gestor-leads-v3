@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../config/database.js';
 import { env } from '../../config/env.js';
 import { llmQueue } from '../../workers/llm-processor.worker.js';
+import { minioClient } from '../../config/minio.js';
 
 /**
  * WEBHOOK EVOLUTION API
@@ -263,12 +264,27 @@ export async function webhookRoutes(app: FastifyInstance) {
         }
 
         if (base64Data) {
-          // TODO: Implementar upload para MinIO
-          // Por enquanto, salvamos a referência
           const isAudio = !!messageData.audioMessage;
           const isVideo = !!messageData.videoMessage;
           const extension = isAudio ? 'ogg' : isVideo ? 'mp4' : 'jpg';
-          midiaUrl = `pending_upload_${Date.now()}_${senderNumber}.${extension}`;
+          const filename = `${empresaId}/${Date.now()}_${senderNumber}.${extension}`;
+          
+          try {
+            const binaryData = Buffer.from(base64Data, 'base64');
+            const contentType = isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : 'image/jpeg';
+            
+            // Upload para o MinIO
+            await minioClient.putObject(env.MINIO_BUCKET, filename, binaryData, binaryData.length, {
+              'Content-Type': contentType,
+            });
+            
+            // Montar a URL pública
+            const protocol = env.MINIO_USE_SSL ? 'https' : 'http';
+            midiaUrl = `${protocol}://${env.MINIO_ENDPOINT}:${env.MINIO_PORT}/${env.MINIO_BUCKET}/${filename}`;
+            console.log(`[WEBHOOK] Mídia salva no MinIO: ${midiaUrl}`);
+          } catch (uploadErr) {
+            console.error('[WEBHOOK] Erro no upload para MinIO:', uploadErr);
+          }
 
           // Transcrição de áudio via Whisper
           if (isAudio && base64Data) {

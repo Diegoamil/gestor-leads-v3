@@ -5,6 +5,7 @@ import { env } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { setupWebSocket } from './websocket/socket.js';
 import { startLlmWorker } from './workers/llm-processor.worker.js';
+import { initializeMinio } from './config/minio.js';
 
 // Rotas
 import { authRoutes } from './modules/auth/auth.routes.js';
@@ -21,6 +22,9 @@ async function bootstrap() {
 
   // 1. Conectar no banco
   await connectDatabase();
+
+  // 2. Inicializar Storage MinIO
+  await initializeMinio();
 
   // 2. Criar servidor Fastify
   const app = Fastify({
