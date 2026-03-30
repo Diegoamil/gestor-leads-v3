@@ -111,4 +111,43 @@ export async function whatsappRoutes(app: FastifyInstance) {
 
     return reply.send({ message: 'Instância desconectada' });
   });
+
+  // ── SINCRONIZAR WEBHOOKS DE TODAS AS INSTÂNCIAS ──
+  app.post('/api/whatsapp/sync-webhooks', { preHandler: authMiddleware }, async (request, reply) => {
+    const conexoes = await prisma.conexaoWhatsApp.findMany();
+    const results = [];
+
+    for (const conexao of conexoes) {
+      try {
+        const evoRes = await fetch(`${env.EVO_URL}/webhook/set/${conexao.evolution_instance_name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': env.EVO_KEY },
+          body: JSON.stringify({
+            webhook: {
+              enabled: true,
+              url: `${env.API_BASE_URL}/api/webhooks/evolution`,
+              byEvents: true,
+              base64: true,
+              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+            },
+          }),
+        });
+
+        results.push({
+          instance: conexao.evolution_instance_name,
+          success: evoRes.ok,
+          status: evoRes.status,
+          message: evoRes.ok ? 'Webhook sincronizado' : await evoRes.text()
+        });
+      } catch (error: any) {
+        results.push({
+          instance: conexao.evolution_instance_name,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    return reply.send({ total: conexoes.length, details: results });
+  });
 }
