@@ -11,7 +11,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "sync-webhooks": "tsx src/scripts/sync-webhooks-cli.ts"
+    "sync-webhooks": "tsx src/scripts/sync-webhooks-cli.ts",
+    "db:migrate-csv": "tsx src/scripts/migrate-data.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
@@ -21,6 +22,7 @@
     "@prisma/client": "^6.8.0",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.25.0",
+    "csv-parse": "^6.2.1",
     "fastify": "^5.2.0",
     "ioredis": "^5.6.0",
     "jsonwebtoken": "^9.0.2",
