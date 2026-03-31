@@ -23,7 +23,7 @@ const envSchema = z.object({
   MINIO_ACCESS_KEY: z.string().default('minioadmin'),
   MINIO_SECRET_KEY: z.string().default('minioadmin'),
   MINIO_BUCKET: z.string().default('midias-leads'),
-  MINIO_USE_SSL: z.coerce.boolean().default(false),
+  MINIO_USE_SSL: z.enum(['true', 'false', '1', '0']).transform(v => v === 'true' || v === '1').default('false'),
 
   // Evolution API
   EVO_URL: z.string().default('https://apievo.wootzap.com.br'),
